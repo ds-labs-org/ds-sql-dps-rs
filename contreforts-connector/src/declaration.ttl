@@ -1,0 +1,59 @@
+########################################################################
+# ds-sql-dps-rs — self-description for Contreforts' connector interface
+#
+# Modelled on contreforts-core/declaration's own
+# tests/fixtures/forgejo-declaration.ttl (D1/D2/D6/D8/D9): extension
+# vocabulary and fields live in this connector's own namespace, never
+# under Contreforts' shared core: namespace.
+#
+# This connector's entity ("a file exposed as a dataspace data offer") has
+# no good alignment target among core's 15 business-sync concepts
+# (customer, invoice, project, ...) — it is deliberately declared with no
+# skos:closeMatch/exactMatch, rather than forced into a mismatched one.
+########################################################################
+
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
+
+@prefix dsdp: <https://ds42.org/ontologies/ds-sql-dps-rs#> .
+@prefix contreforts: <https://contreforts.ds-labs.org/ontologies/declaration#> .
+
+########################################################################
+# Entity vocabulary
+########################################################################
+
+dsdp:DataOffer a rdfs:Class ;
+    rdfs:label "Dataspace data offer" ;
+    rdfs:comment """A single local file exposed to the dataspace via the
+EDC Data Plane Signaling API. Its path, media type and ODRL usage policy
+live in this project's own configuration graph (see ../ARCHITECTURE.md);
+this class exists so that graph is reachable through Contreforts'
+connector interface, keyed by EntityKind "ds-sql-dps-rs:data-offer".""" .
+
+########################################################################
+# Configuration schema
+#
+# MVP: one field, identifying which offer in this instance's own
+# configuration graph a given connector instance serves. Everything else
+# about the offer (file path, media type, policy) is authored directly
+# into the configuration graph, not through this shape — SHACL here
+# describes only what Contreforts itself would need to route a pull()
+# call to the right offer.
+########################################################################
+
+dsdp:DataOfferConnectorShape a sh:NodeShape ;
+    sh:targetClass dsdp:DataOfferConnector ;
+    contreforts:category "dataspace" ;
+
+    sh:property [
+        sh:path dsdp:datasetId ;
+        sh:name "Dataset ID" ;
+        sh:description "Identifies the offer, within this instance's own configuration graph, that this connector serves." ;
+        sh:datatype xsd:string ;
+        sh:nodeKind sh:Literal ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:order 1 ;
+    ] .

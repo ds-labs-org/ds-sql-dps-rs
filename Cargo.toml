@@ -1,0 +1,30 @@
+[workspace]
+resolver = "2"
+members = ["config-graph", "contreforts-connector", "dataplane", "vendor/contreforts-core"]
+
+# vendor/contreforts-core's own Cargo.toml inherits `version`/`edition` via
+# `.workspace = true` — it is designed to be vendored as a workspace member
+# of a consuming project, not built standalone (its own repo has no
+# `[workspace]` of its own; upstream expects a superproject to supply
+# these). `version` exists in this table only because that crate needs it;
+# this project's own crates are all `publish = false` and ignore it.
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/ds-labs-org/ds-sql-dps-rs"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tracing = "0.1"
+async-trait = "0.1"
+tokio = { version = "1", features = ["full"] }
+chrono = { version = "0.4", features = ["serde"] }
+oxigraph = { version = "0.5", default-features = false }
+# Required only because vendor/contreforts-core inherits these via
+# `.workspace = true` (see the members comment above) — not used directly
+# by this project's own crates.
+dirs = "5"
+urlencoding = "2"

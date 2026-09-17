@@ -1,0 +1,33 @@
+[package]
+name = "dataplane"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "ds-sql-dps-rs"
+path = "src/main.rs"
+
+[dependencies]
+config-graph = { path = "../config-graph" }
+contreforts-connector = { path = "../contreforts-connector" }
+contreforts-core = { path = "../vendor/contreforts-core" }
+engine = { path = "../../ds-odrl-engine-rs/engine" }
+dsp-odrl-adapter = { path = "../../ds-odrl-engine-rs/dsp-odrl-adapter", features = ["dsp-ingest"] }
+
+dataplane-sdk = "=0.1.2"
+dataplane-sdk-axum = "=0.1.2"
+
+tokio = { workspace = true }
+axum = "0.8"
+axum-extra = { version = "0.12", features = ["typed-header"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+uuid = { version = "1", features = ["v4"] }
+async-trait = { workspace = true }
+anyhow = "1"
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
