@@ -8,6 +8,7 @@
 pub mod config;
 pub mod handler;
 pub mod public;
+pub mod registration;
 pub mod tokens;
 
 use std::sync::Arc;

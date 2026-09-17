@@ -38,3 +38,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # `dataplane-sdk` already pulls in (see Cargo.lock) so this doesn't add a
 # second reqwest version to the dependency tree.
 reqwest = { version = "=0.13.5", default-features = false, features = ["json", "default-tls"] }
+# Mocks the control plane's HTTP self-registration endpoint in
+# `tests/control_plane_registration.rs`, so that TDD test doesn't need a
+# real EDC control plane running. Current stable release per crates.io.
+wiremock = "0.6.5"
