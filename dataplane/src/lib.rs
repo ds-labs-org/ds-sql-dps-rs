@@ -116,7 +116,9 @@ pub async fn build(config: Config) -> anyhow::Result<App> {
         .build()
         .map_err(|e| anyhow::anyhow!("failed to build DataPlaneSdk: {e}"))?;
 
-    let participant = ParticipantContext::builder().id("ds-sql-dps-rs").build();
+    let participant = ParticipantContext::builder()
+        .id(config.participant_context_id.clone())
+        .build();
 
     let signaling_router = dataplane_sdk_axum::router::router()
         .layer(Extension(participant))
@@ -129,6 +131,49 @@ pub async fn build(config: Config) -> anyhow::Result<App> {
 
     let signaling_addr = format!("0.0.0.0:{}", config.signaling_port);
     let signaling_listener = tokio::net::TcpListener::bind(&signaling_addr).await?;
+
+    // Optional, non-fatal control-plane self-registration (see
+    // `crate::registration` and `../ARCHITECTURE.md`, "What this MVP does
+    // not do"). Only attempted when `CONTROL_PLANE_URL` is set; a failure
+    // here is a warning, never a reason to abort startup, so the
+    // demo-without-a-control-plane workflow keeps working unchanged.
+    if let Some(control_plane_url) = &config.control_plane_url {
+        let signaling_base_url = if config.signaling_port == 0 {
+            format!(
+                "http://localhost:{}",
+                signaling_listener.local_addr()?.port()
+            )
+        } else {
+            format!("http://localhost:{}", config.signaling_port)
+        };
+
+        let registration = crate::registration::DataPlaneRegistration {
+            dataplane_id: config.dataplane_id.clone(),
+            endpoint: signaling_base_url,
+            transfer_types: vec!["HttpData-PULL".to_string()],
+            labels: None,
+            authorization: None,
+        };
+
+        match crate::registration::register_with_control_plane(
+            control_plane_url,
+            &config.participant_context_id,
+            &registration,
+        )
+        .await
+        {
+            Ok(()) => tracing::info!(
+                control_plane_url,
+                dataplane_id = %config.dataplane_id,
+                "registered with control plane"
+            ),
+            Err(e) => tracing::warn!(
+                error = %e,
+                control_plane_url,
+                "control-plane self-registration failed; continuing without it"
+            ),
+        }
+    }
 
     Ok(App {
         signaling_listener,

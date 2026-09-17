@@ -170,12 +170,21 @@ project's *own* vendored submodule, following the same pattern
 
 ## What this MVP does not do
 
-- **No control-plane registration.** A real data plane must register
-  itself (base URL, `allowedSourceTypes`, `allowedTransferTypes`) with
-  the control plane's DataPlaneSelector API at startup so transfers ever
-  get routed to it. This project does not do that — it is runnable and
-  testable standalone (see below), but is not wired into a live EDC
-  control plane.
+- **Control-plane self-registration is one-shot, not a heartbeat.**
+  `dataplane/src/registration.rs` implements the EDC Data Plane Signaling
+  v5beta self-registration call (`PUT
+  /v5beta/participants/{participantContextId}/dataplanes`, ground-truthed
+  against the vendored `eclipse-edc-connector` Java source — see that
+  module's doc comment), and `dataplane::build` attempts it exactly once
+  at startup, only when `CONTROL_PLANE_URL` is set (`dataplane/src/config.rs`).
+  It is deliberately **optional and non-fatal**: with `CONTROL_PLANE_URL`
+  unset, nothing changes from before (no request is made, no log beyond an
+  info line); if set and the PUT fails (unreachable control plane, or a
+  non-2xx response — `RegistrationError` distinguishes the two), that is a
+  `tracing::warn!`, not a startup failure. What's still missing: no retry,
+  no periodic re-registration, and no `allowedSourceTypes`/health-based
+  deregistration — a real long-lived data plane would need at least
+  periodic re-announcement, which this MVP does not attempt.
 - **No SUSPEND, no provider-push.** Both return `HandlerError::NotSupported`.
 - **No SQL execution** — see "SQL scope" above.
 - **No durable storage.** Both the configuration graph and the DPS
@@ -212,6 +221,20 @@ just compiled:
    `contreforts-connector`'s test that its `declaration.ttl` validates
    against Contreforts' own real SHACL meta-shapes
    (`contreforts_declaration::validate`).
+7. Control-plane self-registration (`dataplane/src/registration.rs`):
+   `dataplane/tests/control_plane_registration.rs` mounts a `wiremock`
+   mock control plane expecting exactly one `PUT
+   /v5beta/participants/{participantContextId}/dataplanes` with the
+   `dataplaneId`/`endpoint`/`transferTypes` this project sends, and
+   passes. Additionally verified manually against a plain
+   `http.server`-based mock control plane (not wiremock) on
+   `127.0.0.1:18080`: running the real binary with `CONTROL_PLANE_URL` set
+   produced the exact expected PUT body and path at the mock, logged as
+   `"registered with control plane"`; with `CONTROL_PLANE_URL` unset,
+   startup is unchanged (an info line, no request attempted); with
+   `CONTROL_PLANE_URL` pointed at a closed port, startup still completes
+   and logs a `tracing::warn!` naming the connection failure rather than
+   aborting.
 
 Not run: anything against a live EDC control plane, a live Contreforts
 product, or the official `dps-tck` conformance suite itself (a natural
@@ -245,4 +268,6 @@ cargo run -p dataplane
 
 Configuration is via environment variables (`dataplane/src/config.rs`):
 `DATASET_ID`, `FILE_PATH`, `MEDIA_TYPE`, `ASSIGNER`, `POLICY_NOT_AFTER`,
-`SIGNALING_PORT`, `PUBLIC_PORT`, `PUBLIC_BASE_URL`.
+`SIGNALING_PORT`, `PUBLIC_PORT`, `PUBLIC_BASE_URL`,
+`PARTICIPANT_CONTEXT_ID`, `DATAPLANE_ID`, `CONTROL_PLANE_URL` (unset by
+default — see "What this MVP does not do" for what setting it triggers).

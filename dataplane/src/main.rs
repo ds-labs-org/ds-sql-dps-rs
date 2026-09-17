@@ -17,9 +17,11 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!(%signaling_addr, "Data Plane Signaling API listening (POST /api/v1/dataflows/start, .../{{id}}/terminate)");
     tracing::info!(%public_addr, "public data endpoint listening (GET /public/{{dataset_id}})");
-    tracing::warn!(
-        "this data plane does not register itself with a control plane's DataPlaneSelector API — see ../ARCHITECTURE.md, \"What this MVP does not do\""
-    );
+    if std::env::var("CONTROL_PLANE_URL").is_err() {
+        tracing::info!(
+            "CONTROL_PLANE_URL is not set; skipping control-plane self-registration — see ../ARCHITECTURE.md, \"What this MVP does not do\""
+        );
+    }
 
     dataplane::serve(app).await
 }

@@ -19,6 +19,23 @@ pub struct Config {
     pub signaling_port: u16,
     pub public_port: u16,
     pub public_base_url: String,
+    /// This data plane's own participant-context id, reused both as the
+    /// `dataplane-sdk` `ParticipantContext.id` (`crate::build`) and as the
+    /// `{participantContextId}` path segment of the control-plane
+    /// self-registration PUT (`crate::registration`) — one identifier,
+    /// not two independently-invented ones.
+    pub participant_context_id: String,
+    /// This data plane's own self-chosen, stable identifier, advertised
+    /// to the control plane as `DataPlaneRegistration.dataplane_id`.
+    pub dataplane_id: String,
+    /// Base URL of an EDC control plane's Data Plane Signaling v5beta API
+    /// to self-register with at startup (`PUT
+    /// /v5beta/participants/{participant_context_id}/dataplanes`) — see
+    /// `crate::registration`. `None` (the default) skips registration
+    /// entirely; this is how the demo-without-a-control-plane workflow
+    /// keeps working. When set, a failed registration attempt is logged
+    /// as a warning and does not stop the data plane from starting.
+    pub control_plane_url: Option<String>,
 }
 
 fn env_or(key: &str, default: &str) -> String {
@@ -44,6 +61,9 @@ impl Config {
                 .expect("SIGNALING_PORT must be a u16"),
             public_port,
             public_base_url,
+            participant_context_id: env_or("PARTICIPANT_CONTEXT_ID", "ds-sql-dps-rs"),
+            dataplane_id: env_or("DATAPLANE_ID", "ds-sql-dps-rs-dataplane"),
+            control_plane_url: std::env::var("CONTROL_PLANE_URL").ok(),
         }
     }
 
@@ -75,6 +95,9 @@ impl Config {
             signaling_port: 0,
             public_port: 0,
             public_base_url: String::new(),
+            participant_context_id: "ds-sql-dps-rs".to_string(),
+            dataplane_id: "ds-sql-dps-rs-dataplane".to_string(),
+            control_plane_url: None,
         }
     }
 
