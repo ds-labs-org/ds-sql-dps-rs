@@ -236,11 +236,104 @@ just compiled:
    and logs a `tracing::warn!` naming the connection failure rather than
    aborting.
 
-Not run: anything against a live EDC control plane, a live Contreforts
-product, or the official `dps-tck` conformance suite itself (a natural
-next step, following the pattern `ds-odrl-engine-rs/dsp-odrl-adapter`'s
-own upstream, `dataplane-sdk-rust`, already uses for its own conformance
-claim).
+Not run: anything against a live EDC control plane or a live Contreforts
+product.
+
+## Data Plane Signaling TCK conformance
+
+**Status: green, narrowed scope, gating CI** (`.github/workflows/ci.yml`,
+job `dsp-tck`; test: `dataplane/tests/dps_tck.rs`). Following the pattern
+`ds-odrl-engine-rs/dsp-odrl-adapter`'s own upstream, `dataplane-sdk-rust`,
+already uses for its own conformance claim (its `crates/sdk-tck-tests`),
+this project now runs the real, official
+`eclipsedataspacetck/dps-tck-runtime:1.3.0` container against a real,
+fully-booted instance of this data plane — not a mock, and not a
+reimplementation of the TCK's own assertions.
+
+**Scope.** This data plane is PULL-only, PROVIDER-only, and implements
+only START and TERMINATE (see "Signaling scope" and "What this MVP does
+not do" above). The TCK's own config-driven filtering is test-package
+selection (a JUnit `PackageSelector` — whole packages only, no per-class
+selector) plus JUnit tag include/exclude — there is no per-test-method
+filter. `dataplane/tests/dps.tck.properties` uses those to narrow as far
+as they allow:
+
+- `dataspacetck.test.package` names only the plain
+  `org.eclipse.dataspacetck.dps.verification.dataplane.pull` package, not
+  its `http.pull` sibling — that package's tests additionally require an
+  HTTPS endpoint and a full OAuth token-renewal (`refresh_token` grant)
+  flow this MVP does not implement at all. The `push` and `controlplane`
+  packages are equally out of scope, excluded simply by not being named.
+- the `async` tag is excluded: `FileOfferHandler::on_start`
+  (`dataplane/src/handler.rs`) always answers synchronously with
+  `state=STARTED`, never the 202-Accepted/`STARTING` + started-callback
+  shape the two async tests require.
+
+Even after that narrowing, the remaining `pull` package still contains
+the *consumer* role's tests (this data plane only ever plays the provider
+role) and the provider's SUSPEND/RESUME tests (SUSPEND is the deliberate
+MVP non-goal recorded above, not a gap fixed for this exercise). Nothing
+in the TCK's own config surface can exclude just those. Rather than
+faking a green run by asserting nothing meaningful, `dps_tck.rs` asserts
+the *exact* set of TCK test ids already known to fail for those
+documented reasons:
+
+- `DP_C_PULL:01-01`, `01-02`, `02-01`, `02-02`, `03-01` — the consumer
+  role, unimplemented (`on_prepare` always answers
+  `HandlerError::NotSupported`).
+- `DP_P_PULL:02-01`, `02-02` — SUSPEND, unimplemented (`on_suspend`
+  always answers `HandlerError::NotSupported`).
+
+and that `DP_P_PULL:01-01` (START, then a completed notification) and
+`DP_P_PULL:01-02` (START, then TERMINATE) — the two scenarios this MVP
+actually claims to satisfy — are **not** in that failure set. A
+regression on either of those, a new/different failure appearing, or the
+TCK reporting *fewer* failures than documented (a sign the scope claims
+above have gone stale) all fail the test; only the exact, already-known
+failure set is accepted. This is what lets `dsp-tck` be a normal, gating
+CI job rather than an `allow-failure` one, despite the TCK container
+itself reporting real failures on every run.
+
+**A mechanism specific to this test, `TCK_MODE`** (`Config::tck_mode`,
+`dataplane/src/config.rs` and `handler.rs`): the official TCK mints a
+fresh random UUID `datasetId` per test run, which this data plane would
+otherwise reject at START (its whole MVP scope is one pre-configured
+dataset id). `TCK_MODE=1`/`true` (set only by `dps_tck.rs`, never in
+normal operation) makes `FileOfferHandler::on_start` auto-seed a fresh
+offer — cloned from the same offer `Config::file_offer` would otherwise
+seed at startup, just with `dataset_id` overridden — the first time a
+request names a dataset id the configuration graph doesn't already know,
+instead of rejecting it outright.
+
+**Verified**, not written blind: iterated against a real, locally running
+`dps-tck-runtime:1.3.0` container (Docker on the development machine) —
+first run surfaced the actual TCK-reported failure set, which
+`EXPECTED_FAILURES` in `dps_tck.rs` now encodes exactly; a second run
+reproduced the identical result. See `dataplane/tests/dps_tck.rs`'s module
+doc comment for how to run it (`cargo test --test dps_tck -- --ignored
+--nocapture`; `#[ignore]`d so plain `cargo test` and the `quality` CI job
+stay fast and Docker-independent).
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs two jobs on every push/PR to `main`:
+
+- **`quality`** — `cargo fmt --all -- --check`, `cargo clippy --workspace
+  --all-targets -- -D warnings`, `cargo test --workspace` (which does not
+  run `dps_tck.rs`'s `#[ignore]`d test). No Docker needed; this is the
+  fast, always-on gate.
+- **`dsp-tck`** — the DPS Signaling TCK conformance test described above,
+  on `ubuntu-latest` (Docker preinstalled). Gating, not `allow-failure` —
+  see "Data Plane Signaling TCK conformance" for why an exact-match
+  assertion against a documented, narrowed scope lets this still catch
+  real regressions.
+
+Both jobs check out this repo *and* the sibling `ds-odrl-engine-rs` repo
+(as a second `actions/checkout` into a sibling directory under the
+runner's workspace) before building, since this project's Cargo
+dependencies on `engine`/`dsp-odrl-adapter` are relative paths
+(`../ds-odrl-engine-rs/...` — see "Vendoring and placement" above) that
+only resolve when that sibling is present, submodule-style, on disk.
 
 ## Layout
 

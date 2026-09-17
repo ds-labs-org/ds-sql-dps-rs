@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  quality:
+    name: Format, lint, and test (fast, no Docker)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout ds-sql-dps-rs
+        uses: actions/checkout@v7
+        with:
+          path: ds-sql-dps-rs
+          submodules: recursive
+
+      # ds-sql-dps-rs depends on the sibling ds-odrl-engine-rs repo's
+      # engine/dsp-odrl-adapter crates as relative Cargo path dependencies
+      # (../ds-odrl-engine-rs/engine, .../dsp-odrl-adapter — see
+      # ds-sql-dps-rs/ARCHITECTURE.md, "Vendoring and placement"). In the
+      # parent `dataspace` study repo the two live as sibling git
+      # submodules on disk; here they're checked out as sibling
+      # directories under the runner's workspace the same way.
+      - name: Checkout sibling ds-odrl-engine-rs
+        uses: actions/checkout@v7
+        with:
+          repository: ds-labs-org/ds-odrl-engine-rs
+          path: ds-odrl-engine-rs
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # Deliberately not `cargo fmt --all`: `--all` also formats "local
+      # path-based dependencies" (per `cargo fmt --help`), and since
+      # dataplane depends on ../ds-odrl-engine-rs/{engine,dsp-odrl-adapter}
+      # as relative paths into a *separate* Cargo workspace, `--all` pulls
+      # that entire sibling workspace's formatting state into this check —
+      # a repo this job neither owns nor should be gated on. Plain
+      # `cargo fmt -- --check` still checks every file reachable from this
+      # workspace's own 5 members (verified with `--verbose`); it just
+      # doesn't also walk out into someone else's crate.
+      - name: Check formatting
+        working-directory: ds-sql-dps-rs
+        run: cargo fmt -- --check
+
+      - name: Run clippy
+        working-directory: ds-sql-dps-rs
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      # `#[ignore]`d by default (dataplane/tests/dps_tck.rs) so this stays
+      # fast and never needs Docker — that test has its own job below.
+      - name: Run tests
+        working-directory: ds-sql-dps-rs
+        run: cargo test --workspace
+
+  dsp-tck:
+    name: Data Plane Signaling TCK (narrowed pull/provider scope)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout ds-sql-dps-rs
+        uses: actions/checkout@v7
+        with:
+          path: ds-sql-dps-rs
+          submodules: recursive
+
+      - name: Checkout sibling ds-odrl-engine-rs
+        uses: actions/checkout@v7
+        with:
+          repository: ds-labs-org/ds-odrl-engine-rs
+          path: ds-odrl-engine-rs
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      # GitHub-hosted ubuntu-latest runners have Docker preinstalled;
+      # `testcontainers` (dataplane/tests/dps_tck.rs) drives it directly
+      # to pull and run the real, official
+      # eclipsedataspacetck/dps-tck-runtime:1.3.0 image against a real,
+      # in-process instance of this data plane (dataplane::build) — no
+      # mock, no reimplementation of the TCK's own assertions.
+      #
+      # This does NOT claim full DPS TCK conformance: this data plane is
+      # PULL-only, PROVIDER-only, and implements only START and TERMINATE
+      # by deliberate design (see ../ARCHITECTURE.md, "Signaling scope"
+      # and "What this MVP does not do"). The test asserts the exact,
+      # already-documented set of TCK failures that scope implies — see
+      # dataplane/tests/dps_tck.rs and dataplane/tests/dps.tck.properties
+      # for precisely which TCK tests that is and why — so this job still
+      # gates merges: a real regression, or the TCK reporting a different
+      # failure set than documented, fails it.
+      - name: Run the DPS Signaling TCK conformance test
+        working-directory: ds-sql-dps-rs
+        run: cargo test -p dataplane --test dps_tck -- --ignored --nocapture

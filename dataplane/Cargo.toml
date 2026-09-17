@@ -44,3 +44,13 @@ reqwest = { version = "=0.13.5", default-features = false, features = ["json", "
 # `tests/control_plane_registration.rs`, so that TDD test doesn't need a
 # real EDC control plane running. Current stable release per crates.io.
 wiremock = "0.6.5"
+# Runs the real `eclipsedataspacetck/dps-tck-runtime` container in
+# `tests/dps_tck.rs` — same crate (and major version) the upstream
+# `dataplane-sdk-rust`'s own `sdk-tck-tests` crate uses for the same
+# purpose.
+testcontainers = "0.26"
+# `LogConsumer::accept` returns a `BoxFuture`; the TCK container's own
+# process exit code is always 0 regardless of test outcome, so its stdout
+# has to be watched for `FAILED: ...` lines instead (see `tests/dps_tck.rs`).
+futures = "0.3"
+regex = "1"

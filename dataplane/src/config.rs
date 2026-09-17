@@ -36,6 +36,20 @@ pub struct Config {
     /// keeps working. When set, a failed registration attempt is logged
     /// as a warning and does not stop the data plane from starting.
     pub control_plane_url: Option<String>,
+    /// Conformance-testing escape hatch for the official Data Plane
+    /// Signaling TCK (see `dataplane/tests/dps_tck.rs` and
+    /// `../ARCHITECTURE.md`, "Data Plane Signaling TCK conformance").
+    /// `false` in every normal run (the default): `FileOfferHandler::on_start`
+    /// rejects any `dataset_id` the configuration graph wasn't explicitly
+    /// seeded with, per this MVP's one-file-offer scope. `true` (set via
+    /// `TCK_MODE=1`/`true`) instead auto-seeds a fresh offer — cloned from
+    /// this same `Config`'s own [`Config::file_offer`], just with
+    /// `dataset_id` overridden — the first time a request names a dataset
+    /// id the graph doesn't already know, because the official TCK mints a
+    /// fresh random UUID `datasetId` per test run that this data plane has
+    /// no way to know in advance and no legitimate reason to accept
+    /// outside of conformance testing.
+    pub tck_mode: bool,
 }
 
 fn env_or(key: &str, default: &str) -> String {
@@ -64,6 +78,8 @@ impl Config {
             participant_context_id: env_or("PARTICIPANT_CONTEXT_ID", "ds-sql-dps-rs"),
             dataplane_id: env_or("DATAPLANE_ID", "ds-sql-dps-rs-dataplane"),
             control_plane_url: std::env::var("CONTROL_PLANE_URL").ok(),
+            tck_mode: std::env::var("TCK_MODE")
+                .is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true")),
         }
     }
 
@@ -98,6 +114,7 @@ impl Config {
             participant_context_id: "ds-sql-dps-rs".to_string(),
             dataplane_id: "ds-sql-dps-rs-dataplane".to_string(),
             control_plane_url: None,
+            tck_mode: false,
         }
     }
 

@@ -60,8 +60,15 @@ pub struct App {
 /// and still hand out working endpoint URLs.
 pub async fn build(config: Config) -> anyhow::Result<App> {
     let graph = Arc::new(ConfigGraph::open_in_memory()?);
-    graph.seed_offer(&config.file_offer())?;
+    let offer = config.file_offer();
+    graph.seed_offer(&offer)?;
     tracing::info!(dataset_id = %config.dataset_id, file_path = %config.file_path.display(), "seeded configuration graph");
+    if config.tck_mode {
+        tracing::info!(
+            "TCK_MODE is set: FileOfferHandler::on_start will auto-seed an offer for any \
+             unrecognized dataset id — see ../ARCHITECTURE.md, \"Data Plane Signaling TCK conformance\""
+        );
+    }
 
     // Proves the Contreforts round trip at startup: the same graph this
     // data plane serves over the signaling API is reachable through
@@ -89,8 +96,13 @@ pub async fn build(config: Config) -> anyhow::Result<App> {
     };
 
     let tokens = Arc::new(TokenStore::default());
-    let handler =
-        FileOfferHandler::<MemoryContext>::new(graph.clone(), tokens.clone(), public_base_url);
+    let handler = FileOfferHandler::<MemoryContext>::new(
+        graph.clone(),
+        tokens.clone(),
+        public_base_url,
+        offer,
+        config.tck_mode,
+    );
 
     let ctx = MemoryContext;
     let flows = MemoryDataFlowRepo::default();
