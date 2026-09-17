@@ -363,3 +363,130 @@ impl ConfigGraph {
         }))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::offer::{ConstraintSpec, PermissionSpec};
+
+    fn constraint(left: &str, op: &str, right: &str) -> ConstraintSpec {
+        ConstraintSpec {
+            left_operand: left.to_string(),
+            operator: op.to_string(),
+            right_operand: right.to_string(),
+        }
+    }
+
+    /// A multi-permission, multi-constraint offer whose constraint values
+    /// are all distinct and deliberately *not* alphabetically or
+    /// numerically sorted, so a reconstruction bug that happens to
+    /// preserve order for a trivial (e.g. single-element, or
+    /// already-sorted) input would still be caught here.
+    fn multi_permission_offer() -> FileOffer {
+        FileOffer {
+            dataset_id: "multi".to_string(),
+            title: "multi-permission test offer".to_string(),
+            file_path: PathBuf::from("sample-data/sample.csv"),
+            media_type: "text/csv".to_string(),
+            assigner: "test-assigner".to_string(),
+            permissions: vec![
+                PermissionSpec {
+                    action: "use".to_string(),
+                    constraints: vec![
+                        constraint("dateTime", "lteq", "2030-01-01T00:00:00Z"),
+                        constraint("count", "lteq", "10"),
+                        constraint("purpose", "eq", "research"),
+                    ],
+                },
+                PermissionSpec {
+                    action: "distribute".to_string(),
+                    constraints: vec![
+                        constraint("spatial", "eq", "EU"),
+                        constraint("dateTime", "gteq", "2020-01-01T00:00:00Z"),
+                    ],
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn policy_jsonld_preserves_permission_and_constraint_order() {
+        let graph = ConfigGraph::open_in_memory().expect("open in-memory store");
+        let offer = multi_permission_offer();
+        graph.seed_offer(&offer).expect("seed_offer");
+
+        let doc = graph
+            .policy_jsonld(&offer.dataset_id)
+            .expect("policy_jsonld");
+
+        let permissions = doc["permission"]
+            .as_array()
+            .expect("permission is a JSON array");
+        assert_eq!(permissions.len(), 2, "both permissions must round-trip");
+
+        // Permission order: "use" (index 0) before "distribute" (index 1),
+        // matching `offer.permissions`'s own order — this is the
+        // `ds:order` reconstruction on the permission blank nodes.
+        assert_eq!(permissions[0]["action"], "use");
+        assert_eq!(permissions[1]["action"], "distribute");
+
+        // Constraint order within the first permission: dateTime, count,
+        // purpose — the `ds:order` reconstruction on the constraint blank
+        // nodes, independently of the permission-level ordering above.
+        let use_constraints = permissions[0]["constraint"]
+            .as_array()
+            .expect("first permission's constraint is a JSON array");
+        let use_left_operands: Vec<&str> = use_constraints
+            .iter()
+            .map(|c| c["leftOperand"].as_str().expect("leftOperand is a string"))
+            .collect();
+        assert_eq!(use_left_operands, vec!["dateTime", "count", "purpose"]);
+
+        // And the second permission's constraints, in its own recorded
+        // order (spatial, then dateTime) — a naive implementation that
+        // happened to get the first permission right (e.g. by always
+        // sorting, or by coincidence of insertion order) could still get
+        // a second permission's constraints wrong.
+        let distribute_constraints = permissions[1]["constraint"]
+            .as_array()
+            .expect("second permission's constraint is a JSON array");
+        let distribute_left_operands: Vec<&str> = distribute_constraints
+            .iter()
+            .map(|c| c["leftOperand"].as_str().expect("leftOperand is a string"))
+            .collect();
+        assert_eq!(distribute_left_operands, vec!["spatial", "dateTime"]);
+
+        // Full round trip on the remaining constraint fields too, not just
+        // `leftOperand` — for the first permission's middle constraint.
+        assert_eq!(use_constraints[1]["operator"], "lteq");
+        assert_eq!(use_constraints[1]["rightOperand"], "10");
+    }
+
+    #[test]
+    fn policy_jsonld_omits_constraint_array_when_permission_has_none() {
+        let graph = ConfigGraph::open_in_memory().expect("open in-memory store");
+        let offer = FileOffer {
+            dataset_id: "no-constraints".to_string(),
+            title: "unconstrained permission".to_string(),
+            file_path: PathBuf::from("sample-data/sample.csv"),
+            media_type: "text/csv".to_string(),
+            assigner: "test-assigner".to_string(),
+            permissions: vec![PermissionSpec {
+                action: "use".to_string(),
+                constraints: vec![],
+            }],
+        };
+        graph.seed_offer(&offer).expect("seed_offer");
+
+        let doc = graph
+            .policy_jsonld(&offer.dataset_id)
+            .expect("policy_jsonld");
+        let permissions = doc["permission"].as_array().expect("permission array");
+        assert_eq!(permissions.len(), 1);
+        assert_eq!(permissions[0]["action"], "use");
+        assert!(
+            permissions[0].get("constraint").is_none(),
+            "an unconstrained permission must not carry an empty constraint array"
+        );
+    }
+}

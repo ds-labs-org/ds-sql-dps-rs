@@ -31,3 +31,10 @@ async-trait = { workspace = true }
 anyhow = "1"
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+# Real HTTP calls against the in-process-booted app (see `dataplane::build`)
+# in `tests/signaling_flow.rs`. Version pinned to match what
+# `dataplane-sdk` already pulls in (see Cargo.lock) so this doesn't add a
+# second reqwest version to the dependency tree.
+reqwest = { version = "=0.13.5", default-features = false, features = ["json", "default-tls"] }

@@ -78,6 +78,17 @@ impl Config {
         }
     }
 
+    /// Builder-style override for [`Config::for_test`]'s `policy_not_after`
+    /// (left `None` by `for_test` itself), so a test can seed the same
+    /// `dateTime lteq ...` constraint `POLICY_NOT_AFTER` sets in
+    /// production, without needing a second constructor — see
+    /// `crate::public::get_file`'s per-request re-evaluation, which is
+    /// what this is for exercising.
+    pub fn with_policy_not_after(mut self, not_after: impl Into<String>) -> Self {
+        self.policy_not_after = Some(not_after.into());
+        self
+    }
+
     /// Builds the one [`FileOffer`] this MVP seeds its configuration graph
     /// with at startup.
     pub fn file_offer(&self) -> FileOffer {
