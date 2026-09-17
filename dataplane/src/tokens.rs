@@ -23,13 +23,16 @@ pub struct TokenStore {
 impl TokenStore {
     pub fn issue(&self, flow_id: &str, dataset_id: &str) -> String {
         let token = uuid::Uuid::new_v4().to_string();
-        self.tokens.write().expect("token store lock poisoned").insert(
-            token.clone(),
-            TokenRecord {
-                flow_id: flow_id.to_string(),
-                dataset_id: dataset_id.to_string(),
-            },
-        );
+        self.tokens
+            .write()
+            .expect("token store lock poisoned")
+            .insert(
+                token.clone(),
+                TokenRecord {
+                    flow_id: flow_id.to_string(),
+                    dataset_id: dataset_id.to_string(),
+                },
+            );
         token
     }
 

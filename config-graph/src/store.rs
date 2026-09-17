@@ -213,7 +213,10 @@ impl ConfigGraph {
         Ok(())
     }
 
-    fn select(&self, query: &str) -> Result<Vec<oxigraph::sparql::QuerySolution>, ConfigGraphError> {
+    fn select(
+        &self,
+        query: &str,
+    ) -> Result<Vec<oxigraph::sparql::QuerySolution>, ConfigGraphError> {
         let results = SparqlEvaluator::new()
             .parse_query(query)?
             .on_store(&self.store)
@@ -280,8 +283,14 @@ impl ConfigGraph {
         let header = header
             .first()
             .ok_or_else(|| ConfigGraphError::NotFound(dataset_id.to_string()))?;
-        let target = header.get("target").and_then(literal_value).unwrap_or_default();
-        let assigner = header.get("assigner").and_then(literal_value).unwrap_or_default();
+        let target = header
+            .get("target")
+            .and_then(literal_value)
+            .unwrap_or_default();
+        let assigner = header
+            .get("assigner")
+            .and_then(literal_value)
+            .unwrap_or_default();
 
         // One joined, fully-ordered query rather than a per-permission
         // follow-up query: a blank node's label in SPARQL query *syntax*
@@ -308,15 +317,16 @@ impl ConfigGraph {
             let Some(p) = row.get("p").cloned() else {
                 continue;
             };
-            let action = row.get("action").and_then(literal_value).unwrap_or_default();
+            let action = row
+                .get("action")
+                .and_then(literal_value)
+                .unwrap_or_default();
 
             let entry = match permissions.last_mut() {
                 Some((last_p, value)) if *last_p == p => value,
                 _ => {
-                    permissions.push((
-                        p,
-                        serde_json::json!({ "action": action, "constraint": [] }),
-                    ));
+                    permissions
+                        .push((p, serde_json::json!({ "action": action, "constraint": [] })));
                     &mut permissions.last_mut().expect("just pushed").1
                 }
             };
@@ -334,7 +344,10 @@ impl ConfigGraph {
             .into_iter()
             .map(|(_, mut value)| {
                 if value["constraint"].as_array().is_some_and(Vec::is_empty) {
-                    value.as_object_mut().expect("permission is an object").remove("constraint");
+                    value
+                        .as_object_mut()
+                        .expect("permission is an object")
+                        .remove("constraint");
                 }
                 value
             })

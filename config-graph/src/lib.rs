@@ -9,4 +9,4 @@ mod store;
 pub mod vocab;
 
 pub use offer::{ConstraintSpec, FileOffer, PermissionSpec};
-pub use store::{dataset_iri, ConfigGraph, ConfigGraphError};
+pub use store::{ConfigGraph, ConfigGraphError, dataset_iri};

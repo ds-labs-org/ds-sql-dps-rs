@@ -58,9 +58,9 @@ where
         // Fail fast if this dataset isn't one the configuration graph
         // actually holds, rather than minting a token for a file that
         // will 404 on every subsequent GET.
-        self.graph
-            .file_path(&flow.dataset_id)
-            .map_err(|e| HandlerError::NotSupported(format!("unknown dataset '{}': {e}", flow.dataset_id)))?;
+        self.graph.file_path(&flow.dataset_id).map_err(|e| {
+            HandlerError::NotSupported(format!("unknown dataset '{}': {e}", flow.dataset_id))
+        })?;
 
         let token = self.tokens.issue(&flow.id, &flow.dataset_id);
         let endpoint = format!("{}/public/{}", self.public_base_url, flow.dataset_id);
@@ -69,9 +69,18 @@ where
             .endpoint(endpoint.clone())
             .endpoint_type("HTTP")
             .endpoint_properties(vec![
-                EndpointProperty::builder().name("endpoint").value(endpoint).build(),
-                EndpointProperty::builder().name("authorization").value(token).build(),
-                EndpointProperty::builder().name("authType").value("bearer").build(),
+                EndpointProperty::builder()
+                    .name("endpoint")
+                    .value(endpoint)
+                    .build(),
+                EndpointProperty::builder()
+                    .name("authorization")
+                    .value(token)
+                    .build(),
+                EndpointProperty::builder()
+                    .name("authType")
+                    .value("bearer")
+                    .build(),
             ])
             .build();
 
@@ -94,7 +103,11 @@ where
         ))
     }
 
-    async fn on_terminate(&self, _tx: &mut Self::Transaction, flow: &DataFlow) -> HandlerResult<()> {
+    async fn on_terminate(
+        &self,
+        _tx: &mut Self::Transaction,
+        flow: &DataFlow,
+    ) -> HandlerResult<()> {
         self.tokens.revoke_flow(&flow.id);
         Ok(())
     }
