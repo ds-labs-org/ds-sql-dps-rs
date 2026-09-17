@@ -190,12 +190,14 @@ project's *own* vendored submodule, following the same pattern
 - **No durable storage.** Both the configuration graph and the DPS
   lifecycle state are in-memory; everything is reseeded from environment
   variables (`dataplane/src/config.rs`) on each process start.
-- **`dsp-odrl-adapter`'s documented ingestion gaps apply as-is**:
-  `odrl:andSequence`, `odrl:inheritFrom`, and `odrl:conflict` are not
-  mapped from an ingested policy. Accepted as a known limitation for
-  this MVP (see the adapter's own README) rather than a blocker —
-  policies authored for this project simply avoid those three
-  constructs.
+- ~~`dsp-odrl-adapter`'s documented ingestion gaps apply as-is: `odrl:andSequence`,
+  `odrl:inheritFrom`, and `odrl:conflict` are not mapped from an ingested
+  policy.~~ **Closed upstream 2026-09-17**: `ds-odrl-engine-rs` v0.23.0
+  (this project's pinned version as of that date) ingests all three via
+  real red/green TDD — see that repo's `dsp-odrl-adapter/README.md` and
+  its `v0.23.0` tag. No policy authored for this project needs to avoid
+  them anymore; this bullet is kept only as a dated record that the
+  limitation existed and when it stopped.
 - **`ContrefortsConnector` registration into a running product** is
   unconfirmed — see "Contreforts coupling" above.
 
